@@ -1,8 +1,9 @@
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QPainter, QColor, QPainterPath, QPen
 from PyQt5.QtWidgets import QWidget
+from vcolorpicker import ColorPicker
 
-from components.color_settings_window import ColorSettingsWidget
+from components.utils import hex_to_rgb, rgb_to_hex
 
 
 class ColorSchemeSquare(QWidget):
@@ -11,10 +12,9 @@ class ColorSchemeSquare(QWidget):
     def __init__(self, root_container, number, first_color, second_color):
         super().__init__()
         self.my_number = number
-        self.root_container=root_container
+        self.root_window=root_container
         self.hover = False
         self.is_current = False
-        # self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet("""
                                 QWidget{
                                background-color: #FFFFFF;
@@ -39,15 +39,32 @@ class ColorSchemeSquare(QWidget):
             self.clicked.emit(self.my_number, self.first_color, self.second_color)
             self.is_current = True
         elif event.button() == Qt.RightButton:
-            self.color_settings = ColorSettingsWidget(self, self.root_container, self.first_color, self.second_color)
-            self.color_settings.show()
-            self.color_settings.on_color_change.connect(self.handle_color_change)
+            x =event.x()
+            y= event.y()
+            size = self.width()
+            if 0 <= x < size and 0 <= y < size:
+                if x + y < size:
+                    # верхний треугольник
+                    self.change_gradient_color(True)
+                else:
+                    # нижний треугольник
+                    self.change_gradient_color(False)
 
-    def handle_color_change(self, first_color, second_color):
-        self.first_color = first_color
-        self.second_color = second_color
-        self.clicked.emit(self.my_number, first_color, second_color)
-        self.update()
+
+    def change_gradient_color(self, is_first=True):
+        color = ColorPicker()
+        color.setFixedSize(420, 330)
+        color.move(self.root_window.x() - color.width(), self.root_window.y() + color.width() // 2)
+        current_color = self.first_color if is_first else self.second_color
+        if hsv_color := color.getColor(hex_to_rgb(current_color)):
+            new_color = rgb_to_hex(hsv_color)
+            if is_first:
+                self.first_color = new_color
+            else:
+                self.second_color = new_color
+            self.clicked.emit(self.my_number, self.first_color, self.second_color)
+            self.update()
+
 
     def enterEvent(self, e):
         if not self.hover:

@@ -12,19 +12,19 @@ class PickMusicFolderButton(QPushButton):
         self.setText(text)
         self.setStyleSheet("""
         QPushButton {
-         border: 1px solid #808080;
-         text-align: left;
-         border-radius: 15px;
+         border: 1px solid white;
+         text-align: center;
+         border-radius: 20px;
          padding: 0px 10px;
          color: #E6E6E6;
-         font-size: 18px;
-         background-color: transparent;
+         font-size: 15px;
+         background-color: rgba(0, 0, 0, 0.3);
         }
         QPushButton::hover {
-         background-color: rgba(20, 20, 20, 0.1);
-         border: 2px solid #808080;
+         background-color: rgba(0, 0, 0, 0.5);
+         border: 2px solid white;
           padding: 0px 10px;
-          text-align: left;
+          text-align: center;
         }
         """)
 

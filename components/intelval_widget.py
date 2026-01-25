@@ -19,14 +19,14 @@ class IntervalInputWidget(QWidget):
         self.setFixedSize(120, 70)
         self.setStyleSheet("""
                                                QWidget{
-                                              background-color: transparent;
-                                              border: 1px solid #808080;
+                                              background-color: rgba(0, 0, 0, 0.3);
+                                              border: 1px solid white;
                                                 border-radius: 20px;
                                                  padding: 0px 20px;
                                               }
                                                QWidget::hover{
-                                       background-color: rgba(20, 20, 20, 0.1);
-                                      border: 2px solid #808080;
+                                       background-color: rgba(0, 0, 0, 0.5);
+                                      border: 2px solid white;
                                       border-radius: 20px;
                                        }
                                               """)

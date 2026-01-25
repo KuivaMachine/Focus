@@ -57,9 +57,9 @@ class PlayButton(QPushButton):
 
         # Тень для кнопки
         self.shadow = QGraphicsDropShadowEffect()
-        self.shadow.setBlurRadius(20)
-        self.shadow.setColor(QColor(0, 0, 0, 60))
-        self.shadow.setOffset(0, 8)
+        self.shadow.setBlurRadius(10)
+        self.shadow.setColor(QColor(0, 0, 0))
+        self.shadow.setOffset(0, 2)
         self.setGraphicsEffect(self.shadow)
 
         # АНИМАЦИЯ ВОЗВРАЩЕНИЯ
@@ -97,8 +97,9 @@ class PlayButton(QPushButton):
                 self.time_pos = self.time.pos()
             self.update()
         else:
-            self.is_volume_changing = True
-            self.update_volume_value(event.pos())
+            if event.button() == Qt.LeftButton:
+                self.is_volume_changing = True
+                self.update_volume_value(event.pos())
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):

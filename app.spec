@@ -7,7 +7,11 @@ a = Analysis(
     datas=[
         ('components/*', 'components'),
         ('music/*', 'music'),
-        ('resources/*', 'resources')
+        ('resources/*', 'resources'),
+        ('resources/fonts/*', 'resources/fonts'),
+        ('resources/icons/*', 'resources/icons'),
+        ('resources/toucan/*', 'resources/toucan'),
+        ('resources/tray_icons/*', 'resources/tray_icons'),
     ],
     hiddenimports=[],
     hookspath=[],
@@ -29,5 +33,5 @@ exe = EXE(
     debug=False,
     upx=True,
     console=False,
-    icon='resources/icon2.ico',
+    icon='resources/icon.ico',
 )

@@ -3,10 +3,10 @@ import os
 import sys
 from pathlib import Path
 import keyboard
-from PyQt5.QtCore import QPointF, QEasingCurve, QRect, QThread, pyqtSignal
+from PyQt5.QtCore import QPointF, QEasingCurve, QRect, QThread, pyqtSignal, QRectF
 from PyQt5.QtCore import QTimer
 from PyQt5.QtCore import Qt, QPropertyAnimation
-from PyQt5.QtGui import QConicalGradient, QIcon, QFontDatabase
+from PyQt5.QtGui import QConicalGradient, QIcon, QFontDatabase, QPixmap, QPainterPath
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
 from PyQt5.QtSvg import QSvgWidget
 from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QVBoxLayout, QLineEdit, QLabel, QHBoxLayout, QSlider, \
@@ -22,6 +22,7 @@ from components.service_button import ServiceButton
 from components.pick_music_folder_button import PickMusicFolderButton
 from components.slider import Slider
 from components.time_label import TimeLabel
+from components.toucan_button import ToucanButton
 from components.utils import getPathString, get_resource_path, check_settings, load_settings
 from components.utils import lighten_color_subtract
 
@@ -83,10 +84,11 @@ class ClockWindow(QMainWindow):
         self.scheme_3_second_color = self.settings['scheme_3_second_color']
         self.scheme_4_first_color = self.settings['scheme_4_first_color']
         self.scheme_4_second_color = self.settings['scheme_4_second_color']
-        self.scheme_5_first_color = self.settings['scheme_5_first_color']
-        self.scheme_5_second_color = self.settings['scheme_5_second_color']
+
 
         self.color_schemes_list = {}
+        self.toucan_full = QPixmap(str(resource_path/"toucan/toucan_full.png"))
+        self.toucan_wrap = QPixmap(str(resource_path/"toucan/toucan_wrap.png"))
 
         self.drag_pos = None
         self.set_window_flags(self.lock_window)
@@ -110,12 +112,20 @@ class ClockWindow(QMainWindow):
         self.inner_total_x = 15
         self.inner_total_y = 15
         self.root_container.setGeometry(self.inner_total_x, self.inner_total_y, 300, 120)
+        if self.current_color_scheme==5:
+            self.root_container.setStyleSheet("""
+                                   QWidget{
+                                background-color: transparent;
+                                border-radius: 60px;
+                                padding: 0px;
+                                   }""")
         self.root_container.setStyleSheet(f"""
                        QWidget{{
                        background-color: #{self.background_transparency}1E1F22;
                        border-radius: 60px;
                        padding: 0px;
                        }}""")
+
 
         delete_label = QLabel(self.root_container)
         delete_label.setGeometry(15, 11, 250, 90)
@@ -167,6 +177,7 @@ class ClockWindow(QMainWindow):
         self.vbox.setContentsMargins(0, 0, 0, 0)
         self.vbox.setSpacing(0)
         self.timer_label = TimeLabel(self.time_font)
+        self.timer_label.set_background_transparency(0.7 if self.current_color_scheme==5 else 0.0)
         self.timer_label.fontChanged.connect(self.save_settings)
 
         # ПЛЕЕР МУЗЫКИ
@@ -232,14 +243,14 @@ class ClockWindow(QMainWindow):
         first_settings_hbox.setSpacing(10)
 
         # ВВОД РАБОЧЕГО ПЕРИОДА
-        self.work_interval_widget = IntervalInputWidget(self, self.work_interval, "Рабочий интервал", "work.svg")
+        self.work_interval_widget = IntervalInputWidget(self, self.work_interval, "Рабочий интервал", "icons/work_white.svg")
         self.work_interval_widget.textChanged.connect(lambda text: {
             self.handle_text_input(text, self.work_interval_widget)
         })
         first_settings_hbox.addWidget(self.work_interval_widget)
 
         # ВВОД ПЕРИОДА ОТДЫХА
-        self.rest_interval_widget = IntervalInputWidget(self, self.rest_interval, "Интервал отдыха", "rest.svg")
+        self.rest_interval_widget = IntervalInputWidget(self, self.rest_interval, "Интервал отдыха", "icons/rest_white.svg")
         self.rest_interval_widget.textChanged.connect(lambda text: {
             self.handle_text_input(text, self.rest_interval_widget)
         })
@@ -260,21 +271,23 @@ class ClockWindow(QMainWindow):
         second_settings_hbox.setSpacing(10)
 
         # КНОПКА РАНДОМА
-        random_widget = CheckboxWidget(self, "Случайное воспроизведение", "random.svg", self.settings['random'])
+        random_widget = CheckboxWidget(self, "Случайное воспроизведение", "icons/random_white.svg", self.settings['random'])
         random_widget.stateChanged.connect(lambda state: {
             self.audio_player.switch_random(state),
             self.save_settings(),
         })
         second_settings_hbox.addWidget(random_widget)
 
+
         # КНОПКА БЛОКИРОВКИ ОКНА
-        lock_window_widget = CheckboxWidget(self, "Поверх всех окон", "lock.svg", self.lock_window)
+        lock_window_widget = CheckboxWidget(self, "Поверх всех окон", "icons/lock_white.svg", self.lock_window)
         lock_window_widget.stateChanged.connect(lambda state: {
             self.set_window_flags(state),
             self.save_settings()
         })
         second_settings_hbox.addWidget(lock_window_widget)
         settings_vbox.addWidget(second_settings_widget, alignment=Qt.AlignCenter)
+
 
         # СЛАЙДЕР ПРОЗРАЧНОСТИ ФОНА
         self.background_transparent_slider = Slider(self, "Прозрачность фона", self.first_gradient_color)
@@ -285,7 +298,8 @@ class ClockWindow(QMainWindow):
 
         settings_vbox.addWidget(self.background_transparent_slider, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ТРЕТЬИ 2 ПОЛЯ: НАСТРОЙКА ПЕРВОГО И ВТОРОГО ЦВЕТА
+
+        # ЦВЕТОВЫЕ СХЕМЫ
         third_settings_widget = QWidget()
         third_settings_widget.setStyleSheet("""
                                 QWidget{
@@ -296,7 +310,8 @@ class ClockWindow(QMainWindow):
         third_settings_hbox = QHBoxLayout(third_settings_widget)
         third_settings_hbox.setSpacing(0)
 
-        for i in range(1, 6):
+        self.toucan_button = ToucanButton(str(resource_path/"toucan/toucan_icon.png"))
+        for i in range(1, 5):
             color_scheme = ColorSchemeSquare(self, i, self.settings[f'scheme_{i}_first_color'],
                                              self.settings[f'scheme_{i}_second_color'])
             color_scheme.clicked.connect(lambda number, first_color, second_color: {
@@ -306,7 +321,16 @@ class ClockWindow(QMainWindow):
                 color_scheme.set_is_current(True)
             self.color_schemes_list[i] = color_scheme
             third_settings_hbox.addWidget(color_scheme)
+
+
+        if self.current_color_scheme == 5:
+            self.toucan_button.set_is_current(True)
+        self.toucan_button.clicked.connect(lambda: {
+                self.set_gradient_color(5, "", ""),
+            })
+        third_settings_hbox.addWidget(self.toucan_button)
         settings_vbox.addWidget(third_settings_widget)
+
 
         # КНОПКА ВЫБОРА ПАПКИ С МУЗЫКОЙ
         self.music_widget = QWidget()
@@ -427,19 +451,31 @@ class ClockWindow(QMainWindow):
                 schema.set_is_current(False)
             else:
                 self.current_color_scheme = key
+                self.toucan_button.set_is_current(False)
                 schema.set_is_current(True)
                 setattr(self, f'scheme_{key}_first_color', first_color)
                 setattr(self, f'scheme_{key}_second_color', second_color)
-
-        self.flip_card.set_font_color(first_color)
-        self.background_transparent_slider.set_color(first_color)
-        self.time_slider.set_color(first_color)
-        self.first_gradient_color = first_color
-        self.play_button.set_first_gradient_color(first_color)
-
-        self.second_gradient_color = second_color
-        self.play_button.set_second_gradient_color(second_color)
-
+        if index ==5:
+            self.current_color_scheme = 5
+            first_color="#ffd700"
+            second_color="#cd8501"
+            self.flip_card.set_font_color(first_color)
+            self.background_transparent_slider.set_color(first_color)
+            self.time_slider.set_color(first_color)
+            self.first_gradient_color = first_color
+            self.play_button.set_first_gradient_color(first_color)
+            self.second_gradient_color = second_color
+            self.play_button.set_second_gradient_color(second_color)
+            self.timer_label.set_background_transparency(0.7)
+        else:
+            self.flip_card.set_font_color(first_color)
+            self.background_transparent_slider.set_color(first_color)
+            self.time_slider.set_color(first_color)
+            self.first_gradient_color = first_color
+            self.play_button.set_first_gradient_color(first_color)
+            self.second_gradient_color = second_color
+            self.play_button.set_second_gradient_color(second_color)
+            self.timer_label.set_background_transparency(0.0)
         self.save_settings()
 
     def update_button_style(self, button, color):
@@ -466,13 +502,13 @@ class ClockWindow(QMainWindow):
             "Ringus-Regular.otf"
         ]
         for font_file in fonts:
-            font_path = get_resource_path(font_file)
+            font_path = get_resource_path("fonts/"+font_file)
             font_db.addApplicationFont(str(font_path))
 
     def init_tray(self):
         # Создаем иконку в системном трее
         self.tray_icon = QSystemTrayIcon(self)
-        self.tray_icon.setIcon(QIcon(get_resource_path("resources/icon2.ico")))
+        self.tray_icon.setIcon(QIcon(get_resource_path("resources/icon.ico")))
         self.tray_icon.setToolTip(f"WorkClock v{self.version} - Нажмите дважды, чтобы скрыть")
         # Создаем контекстное меню для трея
         tray_menu = QMenu()
@@ -518,25 +554,25 @@ class ClockWindow(QMainWindow):
            """)
 
         pause_song_action = QAction("Пауза/Играть", self)
-        pause_song_action.setIcon(QIcon(get_resource_path("resources/play.ico")))
+        pause_song_action.setIcon(QIcon(get_resource_path("resources/tray_icons/play.ico")))
         pause_song_action.triggered.connect(self.tray_stop_pause)
         tray_menu.addAction(pause_song_action)
         tray_menu.addSeparator()
 
         next_song_action = QAction("Следующий трек", self)
-        next_song_action.setIcon(QIcon(get_resource_path("resources/next.ico")))
+        next_song_action.setIcon(QIcon(get_resource_path("resources/tray_icons/next.ico")))
         next_song_action.triggered.connect(self.audio_player.play_next_track)
         tray_menu.addAction(next_song_action)
         tray_menu.addSeparator()
 
         previous_song_action = QAction("Предыдущий трек", self)
-        previous_song_action.setIcon(QIcon(get_resource_path("resources/prev.ico")))
+        previous_song_action.setIcon(QIcon(get_resource_path("resources/tray_icons/prev.ico")))
         previous_song_action.triggered.connect(self.audio_player.play_previous_track)
         tray_menu.addAction(previous_song_action)
         tray_menu.addSeparator()
 
         quit_action = QAction("Закрыть", self)
-        quit_action.setIcon(QIcon(get_resource_path("resources/quit.ico")))
+        quit_action.setIcon(QIcon(get_resource_path("resources/tray_icons/quit.ico")))
         quit_action.triggered.connect(self.quit_app)
         tray_menu.addAction(quit_action)
 
@@ -583,8 +619,6 @@ class ClockWindow(QMainWindow):
             "scheme_3_second_color": self.scheme_3_second_color,
             "scheme_4_first_color": self.scheme_4_first_color,
             "scheme_4_second_color": self.scheme_4_second_color,
-            "scheme_5_first_color": self.scheme_5_first_color,
-            "scheme_5_second_color": self.scheme_5_second_color,
             "time_font": self.timer_label.get_time_font()
         }
         appdata = os.getenv('APPDATA')
@@ -763,6 +797,8 @@ class ClockWindow(QMainWindow):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+
+
         # ГРАДИЕНТНАЯ ЦВЕТНАЯ ОБВОДКА
         gradient = QConicalGradient()  # Конический градиент
         gradient.setCenter(QPointF(self.root_container.rect().center()))
@@ -784,9 +820,35 @@ class ClockWindow(QMainWindow):
 
         pen = QPen(QBrush(gradient), 10)
         painter.setPen(pen)
-        painter.drawRoundedRect(self.inner_total_x - 10, self.inner_total_y - 10, self.root_container.width() + 20,
-                                self.root_container.height() + 20, 69, 69)
+        painter.drawRoundedRect(self.inner_total_x - 10, self.inner_total_y - 10, self.root_container.width() + 20,self.root_container.height() + 20, 69, 69)
 
+        if self.current_color_scheme ==5:
+            painter.setBrush(QColor("#1B2228"))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(self.inner_total_x, self.inner_total_y, self.root_container.width(),
+                                    self.root_container.height(), 59, 59)
+
+            if not self.settings_closed:
+                # Рисуем изображение
+                if self.toucan_full:
+                    # Масштабируем под размер виджета
+                    scaled_pixmap = self.toucan_full.scaled(
+                        300,300,
+                        Qt.IgnoreAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    painter.drawPixmap(self.inner_total_x, self.inner_total_y, scaled_pixmap)
+
+            else:
+                # Рисуем изображение
+                if self.toucan_wrap:
+                    # Масштабируем под размер виджета
+                    scaled_pixmap = self.toucan_wrap.scaled(
+                        300, 120,
+                        Qt.IgnoreAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    painter.drawPixmap(self.inner_total_x, self.inner_total_y, scaled_pixmap)
         self.update()
 
     # СРАБАТЫВАЕТ ПРИ НАЖАТИИ
@@ -860,7 +922,7 @@ if __name__ == "__main__":
         app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
         app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         check_settings()
-        version = "2.0.5"
+        version = "2.0.6"
         window = ClockWindow(version)
         window.show()
         app.exec()

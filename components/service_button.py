@@ -11,18 +11,16 @@ class ServiceButton(QPushButton):
             font-size: 18px;
             font-weight: light;
             font-family: 'PT Mono';
-            color: #CCCCCC;
-            background-color: transparent;
-            border: 1px solid #808080;
+            color: white;
+             background-color: rgba(0, 0, 0, 0.3);
             border-radius: 15px;
             padding: 3px;
+            
         }
         QPushButton:hover{
-            background-color: rgba(20, 20, 20, 0.1);
-            border: 2px solid #808080;
+            background-color: rgba(0, 0, 0, 0.5);
         }
         QPushButton:pressed{
-            background-color: rgba(20, 20, 20, 0.4);
-            border:2px solid #808080;
+            background-color: rgba(0, 0, 0, 0.9);
         }
         """)

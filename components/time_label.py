@@ -7,16 +7,10 @@ class TimeLabel(QLabel):
     fontChanged = pyqtSignal()
     def __init__(self, time_font):
         super().__init__()
-        self.setFixedSize(150,50)
+        self.setFixedSize(170,70)
         self.time_font = time_font
         self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("""
-                        QLabel {
-                            padding: 0px;
-                            color: #FFFFFF;
-                            background-color: transparent;
-                        }
-                        """)
+        self.set_background_transparency(0.5)
         font = QFont(time_font, 25)
         font.setBold(True)
         self.setFont(font)
@@ -30,6 +24,17 @@ class TimeLabel(QLabel):
         current_font = next(self.font_cycle)
         while current_font != time_font:
             current_font = next(self.font_cycle)
+
+    def set_background_transparency(self, value):
+        """Значение должно быть от 0.0 до 1.0"""
+        self.setStyleSheet(f"""
+                                QLabel {{
+                                    padding: 10px 20px;
+                                    color: #FFFFFF;
+                                    border-radius: 35px;
+                                    background-color: rgba(0, 0, 0, {value});
+                                }}
+                                """)
 
     def get_time_font(self):
         return self.time_font
