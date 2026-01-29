@@ -56,6 +56,8 @@ class GlobalKeyListener(QThread):
 class ClockWindow(QMainWindow):
     def __init__(self, _version):
         super().__init__()
+        monitor_width = QApplication.primaryScreen().geometry().width()
+        monitor_height = QApplication.primaryScreen().geometry().height()
         self.close_setting_touch_area = False  # ФЛАГ ЧТО КУРСОР НАЖАТ В ОБЛАСТИ ЗАКРЫТИЯ (>650)
         self.settings_closed = True  # ФЛАГ ЧТО НАСТРОЙКИ ЗАКРЫТЫ
         self.closing = False  # ФЛАГ ЧТО НАСТРОЙКИ РАСТЯГИВАЮТСЯ ДЛЯ ЗАКРЫТИЯ В ДАННЫЙ МОМЕНТ
@@ -69,8 +71,8 @@ class ClockWindow(QMainWindow):
         self.background_color = self.settings['background_color']
         self.first_gradient_color = self.settings['first_gradient_color']
         self.second_gradient_color = self.settings['second_gradient_color']
-        self.x_value = int(self.settings['x'])
-        self.y_value = int(self.settings['y'])
+        self.x_value = int(self.settings['x']) if monitor_width>=330+int(self.settings['x']) else int(monitor_width/2)
+        self.y_value = int(self.settings['y']) if monitor_height>=120+int(self.settings['y']) else int(monitor_height/2)
         self.lock_window = self.settings['lock_window']
         self.background_transparency = self.settings['background_transparency']
         self.current_color_scheme = self.settings['current_color_scheme']
@@ -181,7 +183,7 @@ class ClockWindow(QMainWindow):
         self.timer_label.fontChanged.connect(self.save_settings)
 
         # ПЛЕЕР МУЗЫКИ
-        self.audio_player = AudioPlayerThread(self.volume)
+        self.audio_player = AudioPlayerThread(self.volume/100)
         self.audio_player.start()
         self.audio_player.set_music_folder(self.settings['music_path'])
         self.audio_player.random = self.settings['random']
@@ -341,8 +343,12 @@ class ClockWindow(QMainWindow):
         self.select_folder_button = PickMusicFolderButton(self,
                                                           getPathString(self.settings['music_path']) if self.settings[
                                                                                                             'music_path'] != '' else 'Музыка',
-                                                          250, "Папка с музыкой")
+                                                           "Папка с музыкой")
         self.select_folder_button.clicked.connect(self.select_folder)
+        self.select_folder_button.delete_clicked.connect(lambda:{
+            self.audio_player.set_music_off(),
+            self.select_folder_button.setText("Музыка")
+        })
         self.music_hbox.addWidget(self.select_folder_button)
 
         # СЛАЙДЕР ВРЕМЕНИ
@@ -643,9 +649,9 @@ class ClockWindow(QMainWindow):
             self.remaining_time = self.work_interval - value
         self.update_timer()
 
-    def play_pause(self):
+    def play_pause(self, is_playing):
         # Запуск/пауза музыки
-        self.audio_player.switch_play_pause()
+        self.audio_player.switch_play_pause(is_playing)
 
         # Запуск/пауза таймера
         if not self.is_running:
@@ -667,7 +673,6 @@ class ClockWindow(QMainWindow):
 
     def tick_tack(self):
         # ОБНОВЛЯЕМ СЛАЙДЕР
-        # self.update_time_slider()
         self.update_timer()
 
     def update_timer(self):
@@ -687,13 +692,12 @@ class ClockWindow(QMainWindow):
             self.audio_player.play_alarm()
             if not self.is_rest_period:
                 self.audio_player.stop_music(5000)
-                self.audio_player.set_background_volume(5)
+
 
         # Если время вышло
         if self.remaining_time <= 0:
             if self.is_rest_period:
                 self.audio_player.play_music()
-                self.audio_player.set_background_volume(1)
             self.switch_period()
 
     def update_time_slider(self):
@@ -922,7 +926,7 @@ if __name__ == "__main__":
         app.setAttribute(Qt.AA_EnableHighDpiScaling, True)
         app.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
         check_settings()
-        version = "2.0.6"
+        version = "2.0.7"
         window = ClockWindow(version)
         window.show()
         app.exec()

@@ -32,7 +32,7 @@ def checkIsMouseInButton(event):
 class PlayButton(QPushButton):
     next = pyqtSignal()
     back = pyqtSignal()
-    left_clicked = pyqtSignal()
+    left_clicked = pyqtSignal(bool)
     delete_track = pyqtSignal()
     volume_change = pyqtSignal(int)
 
@@ -179,7 +179,7 @@ class PlayButton(QPushButton):
                     self.delete = False
 
             elif event.button() == Qt.LeftButton:
-                self.left_clicked.emit()
+                self.left_clicked.emit(self.is_playing)
                 self.is_playing = not self.is_playing
 
             elif event.button() == Qt.RightButton:
@@ -204,9 +204,11 @@ class PlayButton(QPushButton):
     def wheelEvent(self, event):
         """Обработка колеса мыши - изменение громкости"""
         delta = event.angleDelta().y()
-        self.current_volume += 2 if delta > 0 else -2
+        amount = 2 if self.current_volume>20 else 1
+        self.current_volume += amount if delta > 0 else -amount
         self.current_volume = max(self.min_value, min(self.max_value, self.current_volume))
         self.volume_change.emit(self.current_volume)
+        print(self.current_volume)
 
     def update_volume_value(self, mouse_pos):
         """Обновляет значение слайдера на основе позиции мыши"""
