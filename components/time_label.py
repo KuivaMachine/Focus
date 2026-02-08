@@ -12,15 +12,17 @@ class TimeLabel(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self.set_background_transparency(0.5)
 
-
         # Словарь с оптимальными размерами шрифтов для разного количества символов
         self.font_sizes = {
             "PT Mono": {5: 25, 6: 21},
             "HYWenHei": {5: 22, 6: 20},
             "Stengazeta": {5: 28, 6: 28},
-            "Ringus-Regular": {5: 24, 6: 22}
+            "Ringus-Regular": {5: 24, 6: 22},
+            "NeeNoo": {5: 24, 6: 20},
+            "Kvadrat": {5: 24, 6: 20},
+            "Strogo": {5: 24, 6: 20},
+            "Belarus": {5: 28, 6: 24},
         }
-
         self.font_list = list(self.font_sizes.keys())
         self.font_cycle = itertools.cycle(self.font_list)
 

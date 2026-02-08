@@ -33,7 +33,6 @@ class AudioPlayerThread(QThread):
 
         self.check_timer = QTimer()  # Таймер отслеживания конца трека
         self.check_timer.timeout.connect(self.check_music_end)
-        self.check_timer.start(500)  # Проверка каждые 500 мс
 
         self.alarm_sound_player = QMediaPlayer()  # Плеер основной музыки
 
@@ -48,20 +47,20 @@ class AudioPlayerThread(QThread):
             else:
                 if self.play_button_on:
                     self.play_button_on = False
-                    self._fade_volume(self.CURRENT_VOLUME, 0.0, pygame.mixer.music.pause)
+                    self._fade_volume(self.CURRENT_VOLUME, 0, pygame.mixer.music.pause)
                 else:
                     self.play_button_on = True
                     pygame.mixer.music.unpause()
-                    self._fade_volume(0.0, self.CURRENT_VOLUME)
+                    self._fade_volume(0, self.CURRENT_VOLUME)
         else:
             self.play_button_on = not is_playing
 
 
     def set_volume(self, value):
-        if 0.0 <= value <= 1.0:
+        if 0 <= value <= 100:
             self.CURRENT_VOLUME = value
             if not self.off:
-                pygame.mixer.music.set_volume(value)
+                pygame.mixer.music.set_volume(self.CURRENT_VOLUME/100)
 
     def switch_random(self, state):
         self.random = True if state else False
@@ -69,12 +68,12 @@ class AudioPlayerThread(QThread):
 
     def check_music_end(self):
         # Проверяем, закончилось ли воспроизведение
-        if self.play_button_on and not pygame.mixer.music.get_busy():
+        if self.playlist and self.play_button_on and not self.off and not pygame.mixer.music.get_busy():
             self.play_next_track()
 
     def run(self):
         pygame.mixer.init()
-        pygame.mixer.music.set_volume(self.CURRENT_VOLUME)
+        self.set_volume(self.CURRENT_VOLUME)
         self.alarm_sound_player.setMedia(QMediaContent(QUrl.fromLocalFile(get_resource_path("music/alarm.wav"))))
         self.alarm_sound_player.setVolume(11)
 
@@ -101,17 +100,20 @@ class AudioPlayerThread(QThread):
             self.off = False
 
     def set_music_off(self):
-        self._fade_volume(self.CURRENT_VOLUME, 0.0, pygame.mixer.stop, 3000)
+        self.path_to_music = ""
+        self._fade_volume(self.CURRENT_VOLUME, 0, pygame.mixer.stop)
         self.off = True
         pygame.mixer.music.unload()
         self.playlist = []
         self.history = []
+        self.check_timer.stop()
 
 
-    def stop_music(self, fade_duration=3000):
+    def stop_music(self):
         self.play_button_on = False
-        self._fade_volume(self.CURRENT_VOLUME, 0.0, pygame.mixer.stop, fade_duration)
+        self._fade_volume(self.CURRENT_VOLUME, 0, pygame.mixer.stop)
         self.off = True
+        self.check_timer.stop()
 
 
     def play_music(self):
@@ -121,6 +123,7 @@ class AudioPlayerThread(QThread):
             self.playlist = self.find_audio_files_recursive(self.path_to_music)
         if self.playlist:
             self.play_next_track()
+            self.check_timer.start(500)  # Проверка каждые 500 мс
 
 
     def find_audio_files_recursive(self, directory):
@@ -161,6 +164,7 @@ class AudioPlayerThread(QThread):
     def play_previous_track(self):
         if self.play_button_on and self.history:
             try:
+                print("here")
                 if self.pointer_of_song_in_history > 0:
                     self.current_song = self.history[self.pointer_of_song_in_history - 1]
                     while not check_exists(self.current_song):
@@ -172,7 +176,7 @@ class AudioPlayerThread(QThread):
                 self.play_track(self.current_song)
                 self.update_song_history.emit(self.current_song,
                                               self.get_context_songs(self.playlist, self.current_song))
-                # self.print_history()
+                self.print_history()
 
             except Exception as e:
                 log_error(self.path_to_music, e, "play_previous_track", self.current_song)
@@ -227,8 +231,8 @@ class AudioPlayerThread(QThread):
     def play_track(self, song):
         pygame.mixer.music.load(song)
         pygame.mixer.music.play()
-        pygame.mixer.music.set_volume(0.0)
-        self._fade_volume(0.0, self.CURRENT_VOLUME)
+        pygame.mixer.music.set_volume(0)
+        self._fade_volume(0, self.CURRENT_VOLUME)
 
     def print_history(self):
         """Цветной вывод истории"""
@@ -266,33 +270,26 @@ class AudioPlayerThread(QThread):
         start_index = max(0, min(current_index - 5, len(song_list) - 11))
         return song_list[start_index:start_index + 11]
 
-    def _fade_volume(self, start_volume, end_volume, custom_callback=None, fade_duration=2500):
+    def _fade_volume(self, start_volume, end_volume, custom_callback=None):
         self.fade_timer.stop()
         self.current_volume = start_volume
         self.target_volume = end_volume
         self.custom_callback = custom_callback
-        self.fade_duration = fade_duration
         self.fade_timer.start(50)
 
     def _update_fade(self):
-        """Обновление громкости на каждом шаге фейда"""
-        # Рассчитываем шаг изменения громкости для 15 секунд
-        total_steps = self.fade_duration / 100  # 15000ms / 100ms = 150 шагов
-        step = 1.0 / total_steps  # Шаг изменения громкости
-
+        step = 4 if self.current_volume<40 else 15 # Шаг изменения громкости в целых числах, для удобства и избежания дробей
         if self.current_volume < self.target_volume:
             self.current_volume = min(self.current_volume + step, self.target_volume)
         else:
-            self.current_volume = max(self.current_volume - step, self.target_volume)
+            self.current_volume = max(self.current_volume - step, 0)
 
         # Устанавливаем громкость
-        pygame.mixer.music.set_volume(self.current_volume)
-
+        pygame.mixer.music.set_volume(self.current_volume/100)
         # Проверяем достижение целевой громкости
-        if abs(self.current_volume - self.target_volume) < 0.01:
+        if abs(self.current_volume - self.target_volume) == 0:
             self.fade_timer.stop()
             self.current_volume = self.target_volume
-
             if self.custom_callback:
                 self.custom_callback()
 

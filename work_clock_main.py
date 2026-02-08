@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import sys
 from pathlib import Path
 import keyboard
@@ -104,8 +105,8 @@ class ClockWindow(QMainWindow):
         self.start_dash = 1.0
 
         # ПЕРИОДЫ ТАЙМЕРА (в секундах)
-        self.rest_interval = int(self.settings['rest_interval']) * 60  # 5 минут перерыв
-        self.work_interval = int(self.settings['work_interval']) * 60  # 25 минут работа
+        self.rest_interval = int(self.settings['rest_interval']) * 60  # перерыв
+        self.work_interval = int(self.settings['work_interval']) * 60  # работа
 
         # Состояние таймера
         self.is_running = False
@@ -148,7 +149,7 @@ class ClockWindow(QMainWindow):
 
         # Таймер
         self.tick_timer = QTimer()
-        self.tick_timer.timeout.connect(self.tick_tack)
+        self.tick_timer.timeout.connect(self.update_timer)
         self.tick_timer.setInterval(1000)  # Обновление каждую секунду
 
         # Основной layout для корневого контейнера
@@ -186,7 +187,7 @@ class ClockWindow(QMainWindow):
         self.timer_label.fontChanged.connect(self.save_settings)
 
         # ПЛЕЕР МУЗЫКИ
-        self.audio_player = AudioPlayerThread(self.volume/100)
+        self.audio_player = AudioPlayerThread(self.volume)
         self.audio_player.start()
         self.audio_player.set_music_folder(self.settings['music_path'])
         self.audio_player.random = self.settings['random']
@@ -204,12 +205,12 @@ class ClockWindow(QMainWindow):
         self.play_button = PlayButton(self.volume, self.time_widget, delete_label)
         self.play_button.volume_change.connect(lambda value:{
             self.save_settings(),
-            self.audio_player.set_volume(value/100)
+            self.audio_player.set_volume(value)
         })
         self.play_button.left_clicked.connect(self.play_pause)
-        self.play_button.next.connect(self.audio_player.play_next_track)
-        self.play_button.back.connect(self.audio_player.play_previous_track)
-        self.play_button.delete_track.connect(self.audio_player.delete_current_track)
+        self.play_button.next.connect(self.play_next_track)
+        self.play_button.back.connect(self.play_previous_track)
+        self.play_button.delete_track.connect(self.delete_current_track)
 
         hbox.addWidget(self.play_button)
         hbox.addWidget(self.time_widget)
@@ -381,16 +382,28 @@ class ClockWindow(QMainWindow):
         self.key_listener.key_pressed.connect(self.on_key_pressed)
         self.key_listener.start()
 
-        self.reset_timer()
+        self.init_timer()
         self.init_tray()
         self.load_fonts()
+
+    def delete_current_track(self):
+        if not self.is_rest_period:
+            self.audio_player.delete_current_track()
+
+    def play_previous_track(self):
+        if not self.is_rest_period:
+            self.audio_player.play_previous_track()
+
+    def play_next_track(self):
+        if not self.is_rest_period:
+            self.audio_player.play_next_track()
 
     # ОБРАБОТКА КЛАВИШ ДЛЯ ПЕРЕКЛЮЧЕНИЯ ТРЕКОВ
     def on_key_pressed(self, key_name):
         if key_name == 'page up':
-            self.audio_player.play_previous_track()
+            self.play_previous_track()
         elif key_name == 'page down':
-            self.audio_player.play_next_track()
+            self.play_next_track()
 
     def handle_work_text_input(self, text, field):
         if text.isdigit() and 999 >=int(text)>0:
@@ -421,11 +434,12 @@ class ClockWindow(QMainWindow):
         else:
             field.setText("30")
 
+
+        new_work_interval = int(self.work_interval_widget.text()) * 60
+        if self.work_interval != new_work_interval:
+            self.work_interval = new_work_interval
         if not self.is_rest_period:
-            new_work_interval = int(self.work_interval_widget.text()) * 60
-            if self.work_interval != new_work_interval:
-                self.work_interval = new_work_interval
-                self.time_slider.setRange(0, self.work_interval - 8)
+            self.time_slider.setRange(0, self.work_interval - 8)
             self.time_slider.setValue(0)
             self.set_remain_time(0)
 
@@ -460,11 +474,12 @@ class ClockWindow(QMainWindow):
         else:
             field.setText("5")
 
+
+        new_rest_interval = int(self.rest_interval_widget.text()) * 60
+        if self.rest_interval != new_rest_interval:
+            self.rest_interval = new_rest_interval
         if self.is_rest_period:
-            new_rest_interval = int(self.rest_interval_widget.text()) * 60
-            if self.rest_interval != new_rest_interval:
-                self.rest_interval = new_rest_interval
-                self.time_slider.setRange(0, self.rest_interval - 8)
+            self.time_slider.setRange(0, self.rest_interval - 8)
             self.time_slider.setValue(0)
             self.set_remain_time(0)
 
@@ -554,7 +569,11 @@ class ClockWindow(QMainWindow):
             "PTMono.ttf",
             "HYWenHei.ttf",
             "Stengazeta.ttf",
-            "Ringus-Regular.otf"
+            "Ringus-Regular.otf",
+            "NeeNoo.ttf",
+            "Kvadrat.otf",
+            "Strogo.ttf",
+            "Belarus.ttf"
         ]
         for font_file in fonts:
             font_path = get_resource_path("fonts/"+font_file)
@@ -616,13 +635,13 @@ class ClockWindow(QMainWindow):
 
         next_song_action = QAction("Следующий трек", self)
         next_song_action.setIcon(QIcon(get_resource_path("resources/tray_icons/next.ico")))
-        next_song_action.triggered.connect(self.audio_player.play_next_track)
+        next_song_action.triggered.connect(self.play_next_track)
         tray_menu.addAction(next_song_action)
         tray_menu.addSeparator()
 
         previous_song_action = QAction("Предыдущий трек", self)
         previous_song_action.setIcon(QIcon(get_resource_path("resources/tray_icons/prev.ico")))
-        previous_song_action.triggered.connect(self.audio_player.play_previous_track)
+        previous_song_action.triggered.connect(self.play_previous_track)
         tray_menu.addAction(previous_song_action)
         tray_menu.addSeparator()
 
@@ -635,8 +654,10 @@ class ClockWindow(QMainWindow):
         self.tray_icon.activated.connect(self.tray_icon_activated)
         self.tray_icon.show()
 
+
+
     def tray_stop_pause(self):
-        self.play_pause()
+        self.play_pause(self.play_button.is_playing)
         self.play_button.is_playing = not self.play_button.is_playing
 
     def tray_icon_activated(self, reason):
@@ -685,13 +706,14 @@ class ClockWindow(QMainWindow):
             json.dump(settings, f, indent=4, ensure_ascii=False)
 
     def select_folder(self):
-        # Открываем диалог выбора папки
-        folder_path = QFileDialog.getExistingDirectory(self, 'Выберите папку с песнями')
-        # Если пользователь выбрал папку
-        if folder_path:
-            self.select_folder_button.setText(getPathString(folder_path))
-            self.audio_player.set_music_folder(folder_path)
-            self.save_settings()
+        if not self.is_rest_period:
+            # Открываем диалог выбора папки
+            folder_path = QFileDialog.getExistingDirectory(self, 'Выберите папку с песнями')
+            # Если пользователь выбрал папку
+            if folder_path:
+                self.select_folder_button.setText(getPathString(folder_path))
+                self.audio_player.set_music_folder(folder_path)
+                self.save_settings()
 
     def set_remain_time(self, value):
         if self.is_rest_period:
@@ -722,9 +744,6 @@ class ClockWindow(QMainWindow):
             self.is_running = False
             self.tick_timer.stop()
 
-    def tick_tack(self):
-        # ОБНОВЛЯЕМ СЛАЙДЕР
-        self.update_timer()
 
     def update_timer(self):
         """Обновление таймера каждую секунду"""
@@ -742,8 +761,7 @@ class ClockWindow(QMainWindow):
         if self.remaining_time == 4:
             self.audio_player.play_alarm()
             if not self.is_rest_period:
-                self.audio_player.stop_music(5000)
-
+                self.audio_player.stop_music()
 
         # Если время вышло
         if self.remaining_time <= 0:
@@ -751,11 +769,6 @@ class ClockWindow(QMainWindow):
                 self.audio_player.play_music()
             self.switch_period()
 
-    def update_time_slider(self):
-        if self.is_rest_period:
-            self.time_slider.setValue(self.rest_interval - self.remaining_time)
-        else:
-            self.time_slider.setValue(self.work_interval - self.remaining_time)
 
     def update_progress_indicator(self):
         """Обновление индикатора прогресса (обводки)"""
@@ -797,12 +810,9 @@ class ClockWindow(QMainWindow):
         self.start_dash = 1
 
         self.time_slider.setValue(0)
-        self.time_slider.setRange(0, self.remaining_time - 6)
+        self.time_slider.setRange(0, self.remaining_time - 5)
 
-    def reset_timer(self):
-        """Сброс таймера"""
-        self.pause_timer()
-        self.is_rest_period = False
+    def init_timer(self):
         self.remaining_time = self.work_interval
         self.start_dash = 1  # Полная обводка
 
@@ -810,7 +820,6 @@ class ClockWindow(QMainWindow):
         seconds = self.remaining_time % 60
         self.timer_label.setText(f"{minutes:02d}:{seconds:02d}")
 
-        self.play_button.is_playing = False
         self.time_slider.setValue(0)
         self.time_slider.setRange(0, self.remaining_time - 8)
         self.update()
@@ -825,7 +834,6 @@ class ClockWindow(QMainWindow):
 
     def close_settings(self):
         """Закрывает настройки - скрываем нижнюю часть и уменьшаем контейнер"""
-
         self.flip_card.hide()
         self.open_button.show()
         self.close_settings_animation.start()
@@ -834,8 +842,6 @@ class ClockWindow(QMainWindow):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-
 
         # ГРАДИЕНТНАЯ ЦВЕТНАЯ ОБВОДКА
         gradient = QConicalGradient()  # Конический градиент
@@ -954,7 +960,7 @@ class ClockWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-    version = "2.0.8"
+    version = "2.1.0"
 
     try:
         app = QApplication(sys.argv)
@@ -966,5 +972,6 @@ if __name__ == "__main__":
         window.show()
         app.exec()
     except Exception as e:
+        log_error(error=str(e), method_prefix="ОШИБКА в основном методе")
         print("ОШИБКА в основном методе: ", e)
 

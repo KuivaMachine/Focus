@@ -11,7 +11,6 @@ import platform
 import psutil
 import requests
 from dotenv import load_dotenv
-from pyexpat.errors import messages
 from screeninfo import screeninfo
 
 LOG_FILE_NAME = "FocusTimer - logs"
@@ -148,11 +147,17 @@ def check_settings(version):
         # Проверяем каждый ключ из стандартных настроек
         for key, default_value in default_settings.items():
             # Проверяем текущий номер версии
-            if key == "current_version" and key in existing_settings and existing_settings[key] != version:
-                existing_settings[key] = version
-                success = send_statistic("установлена новая версия поверх старой", os.getenv("apple"), os.getenv("kiwi"), version)
-                existing_settings["need_to_send"] = False if success else True
-                settings_updated = True
+            if key == "current_version" and key in existing_settings:
+                if int(existing_settings[key].replace(".","")) < int(version.replace(".","")):
+                    success = send_statistic(f"Установлена новая версия поверх старой ({existing_settings[key]})", os.getenv("apple"), os.getenv("kiwi"), version)
+                    existing_settings[key] = version
+                    existing_settings["need_to_send"] = False if success else True
+                    settings_updated = True
+                elif int(existing_settings[key].replace(".","")) > int(version.replace(".","")):
+                    success = send_statistic(f"Установлена более старая версия ({version}) вместо v{existing_settings[key]}", os.getenv("apple"),os.getenv("kiwi"), version)
+                    existing_settings[key] = version
+                    existing_settings["need_to_send"] = False if success else True
+                    settings_updated = True
 
             if key not in existing_settings:
                 # Добавляем отсутствующий ключ со значением по умолчанию
