@@ -24,7 +24,7 @@ class AudioPlayerThread(QThread):
 
         self.CURRENT_VOLUME = volume  # Громкость
         self.off = False  # Флаг тишины основной музыки
-        self.current_song = None  # Индекс текущего трека
+        self.current_song = "" # Текущий трек
         self.playlist = []  # Список файлов для воспроизведения
         self.history = []  # Список файлов, которые были проиграны
 
@@ -106,6 +106,8 @@ class AudioPlayerThread(QThread):
         pygame.mixer.music.unload()
         self.playlist = []
         self.history = []
+        self.current_song = ""
+        self.pointer_of_song_in_history = -1
         self.check_timer.stop()
 
 
@@ -146,8 +148,10 @@ class AudioPlayerThread(QThread):
             if self.random:
                 return self.get_random_song()
             else:
-                return self.playlist[
-                    (self.playlist.index(self.current_song) + 1) % len(self.playlist) if not self.is_first_play else 0]
+                if self.current_song:
+                    return self.playlist[(self.playlist.index(self.current_song) + 1) % len(self.playlist) if not self.is_first_play else 0]
+                else:
+                    return self.playlist[0]
 
     def get_random_song(self):
         if self.playlist:
@@ -162,9 +166,9 @@ class AudioPlayerThread(QThread):
             return random.choice(available_songs)
 
     def play_previous_track(self):
+        print(self.pointer_of_song_in_history)
         if self.play_button_on and self.history:
             try:
-                print("here")
                 if self.pointer_of_song_in_history > 0:
                     self.current_song = self.history[self.pointer_of_song_in_history - 1]
                     while not check_exists(self.current_song):
@@ -204,7 +208,7 @@ class AudioPlayerThread(QThread):
     def play_next_track(self):
         if self.playlist and self.play_button_on:
             try:
-                # Если я не в конце истории - беру следующий в истории трек
+                # Если я не в конце истории - беру следующий в истории трек (это нужно, когда листаешь треки назад и хочешь вернуться)
                 if self.pointer_of_song_in_history != -1 and len(self.history) - 1 > self.pointer_of_song_in_history:
                     self.current_song = self.history[self.pointer_of_song_in_history + 1]
                     while not check_exists(self.current_song):
@@ -296,8 +300,8 @@ class AudioPlayerThread(QThread):
     def quit(self):
         """Корректное завершение"""
         self.fade_timer.stop()
-
+        self.check_timer.stop()
         pygame.mixer.music.stop()
+        pygame.mixer.music.unload()
         pygame.mixer.quit()
-
         super().quit()

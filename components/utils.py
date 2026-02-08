@@ -13,7 +13,7 @@ import requests
 from dotenv import load_dotenv
 from screeninfo import screeninfo
 
-LOG_FILE_NAME = "FocusTimer - logs"
+LOG_FILE_NAME = "FocusLogs.txt"
 
 
 def lighten_color_subtract(hex_color, amount=40):
@@ -95,7 +95,7 @@ def check_settings(version):
     load_dotenv(env_path)
 
     # Определяем пути
-    appdata_dir = Path(os.getenv('APPDATA')) / "FocusTimer"
+    appdata_dir = Path(os.getenv('APPDATA')) / "Focus"
     appdata_dir.mkdir(parents=True, exist_ok=True)
 
     file_path = appdata_dir / "settings.json"
@@ -109,12 +109,12 @@ def check_settings(version):
         "music_path": "",
         "random": False,
         "background_color": "#333333",
-        "first_gradient_color": "#FB06AD",
-        "second_gradient_color": "#FF8C00",
+        "first_gradient_color": "#ffd700",
+        "second_gradient_color": "#cd8501",
         "lock_window": True,
-        "background_transparency": "99",
-        "current_color_scheme": 1,
-        "volume": 50,
+        "background_transparency": "01",
+        "current_color_scheme": 5,
+        "volume": 30,
         "scheme_1_first_color": "#ffd700",
         "scheme_1_second_color": "#ff00a5",
         "scheme_2_first_color": "#ffffff",
@@ -190,7 +190,7 @@ def check_settings(version):
 # ВОЗВРАЩАЕТ НАСТРОЙКИ ИЗ APPDATA
 def load_settings():
     appdata = os.getenv('APPDATA')
-    app_dir = Path(appdata) / "FocusTimer" / 'settings.json'
+    app_dir = Path(appdata) / "Focus" / 'settings.json'
     try:
         with open(app_dir, "r", encoding='utf-8') as f:
             return json.load(f)
@@ -218,7 +218,7 @@ def send_statistic(message, apple, kiwi, version):
     try:
         # Основные данные
         main_info = f"""
-        <b>🚀 Запущен FocusTimer v{version}</b>
+        <b>🚀 Запущен Focus v{version}</b>
     
         <b>📝 Событие:</b> {message}
         <b>⏰ Время:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}

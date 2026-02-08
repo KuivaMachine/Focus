@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['work_clock_main.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[
@@ -30,7 +30,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Focus Timer',
+    name='Focus',
     debug=False,
     upx=True,
     console=False,

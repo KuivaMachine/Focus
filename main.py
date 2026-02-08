@@ -1,26 +1,25 @@
 import json
 import os
-import random
 import sys
 from pathlib import Path
+
 import keyboard
-from PyQt5.QtCore import QPointF, QEasingCurve, QRect, QThread, pyqtSignal, QRectF
+from PyQt5.QtCore import QPointF, QEasingCurve, QRect, QThread, pyqtSignal
 from PyQt5.QtCore import QTimer
 from PyQt5.QtCore import Qt, QPropertyAnimation
-from PyQt5.QtGui import QConicalGradient, QIcon, QFontDatabase, QPixmap, QPainterPath
+from PyQt5.QtGui import QConicalGradient, QIcon, QFontDatabase, QPixmap
 from PyQt5.QtGui import QPainter, QColor, QBrush, QPen
-from PyQt5.QtSvg import QSvgWidget
-from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QVBoxLayout, QLineEdit, QLabel, QHBoxLayout, QSlider, \
-    QFileDialog, QSystemTrayIcon, QMenu, QAction
+from PyQt5.QtWidgets import QMainWindow, QWidget, QApplication, QVBoxLayout, QLabel, QHBoxLayout, QFileDialog, \
+    QSystemTrayIcon, QMenu, QAction
 
 from components.checkbox import CheckboxWidget
 from components.color_scheme_square import ColorSchemeSquare
 from components.flip_window import FlipCard
 from components.intelval_widget import IntervalInputWidget
+from components.pick_music_folder_button import PickMusicFolderButton
 from components.play_button import PlayButton
 from components.player import AudioPlayerThread
 from components.service_button import ServiceButton
-from components.pick_music_folder_button import PickMusicFolderButton
 from components.slider import Slider
 from components.time_label import TimeLabel
 from components.toucan_button import ToucanButton
@@ -28,10 +27,12 @@ from components.utils import getPathString, get_resource_path, check_settings, l
 from components.utils import lighten_color_subtract
 
 
-
 class GlobalKeyListener(QThread):
     """Поток для отслеживания глобальных нажатий клавиш"""
-    key_pressed = pyqtSignal(str)
+    key_pressed = pyqtSignal(str)  # Сигнал нажатия на клавишу
+    service_combo = pyqtSignal(bool)  # Сигнал комбинации F12+Enter
+    isF12Pressed = False
+    isEnterPressed = False
 
     def __init__(self):
         super().__init__()
@@ -44,9 +45,17 @@ class GlobalKeyListener(QThread):
     def on_key_event(self, event):
         """Обработчик события клавиатуры"""
         key_name = event.name
+
         if event.event_type == keyboard.KEY_UP:
             # Отправляем сигнал в главный поток только когда клавиша отпускается
             self.key_pressed.emit(key_name)
+            if self.isF12Pressed: self.isF12Pressed = key_name != 'f12'
+            if self.isEnterPressed: self.isEnterPressed = key_name != 'enter'
+
+        elif event.event_type == keyboard.KEY_DOWN:
+            if not self.isF12Pressed: self.isF12Pressed = key_name == 'f12'
+            if not self.isEnterPressed: self.isEnterPressed = key_name == 'enter'
+            self.service_combo.emit(self.isF12Pressed and self.isEnterPressed)
 
     def stop(self):
         """Остановка потока"""
@@ -59,9 +68,10 @@ class ClockWindow(QMainWindow):
         super().__init__()
         monitor_width = QApplication.primaryScreen().geometry().width()
         monitor_height = QApplication.primaryScreen().geometry().height()
-        self.close_setting_touch_area = False  # ФЛАГ ЧТО КУРСОР НАЖАТ В ОБЛАСТИ ЗАКРЫТИЯ (>650)
-        self.settings_closed = True  # ФЛАГ ЧТО НАСТРОЙКИ ЗАКРЫТЫ
-        self.closing = False  # ФЛАГ ЧТО НАСТРОЙКИ РАСТЯГИВАЮТСЯ ДЛЯ ЗАКРЫТИЯ В ДАННЫЙ МОМЕНТ
+        self.close_setting_touch_area = False   # ФЛАГ, ЧТО КУРСОР НАЖАТ В ОБЛАСТИ ЗАКРЫТИЯ (>650)
+        self.service_combo = False              # ФЛАГ, ЧТО ЗАЖАТЫ КЛАВИШИ F12+ENTER
+        self.settings_closed = True             # ФЛАГ, ЧТО НАСТРОЙКИ ЗАКРЫТЫ
+        self.closing = False                    # ФЛАГ, ЧТО НАСТРОЙКИ РАСТЯГИВАЮТСЯ ДЛЯ ЗАКРЫТИЯ В ДАННЫЙ МОМЕНТ
         self.initial_pos = None
         self.original_height = 650
         app_directory = Path(__file__).parent  # Ищет родительский каталог проекта
@@ -72,8 +82,10 @@ class ClockWindow(QMainWindow):
         self.background_color = self.settings['background_color']
         self.first_gradient_color = self.settings['first_gradient_color']
         self.second_gradient_color = self.settings['second_gradient_color']
-        self.x_value = int(self.settings['x']) if monitor_width>=330+int(self.settings['x']) else int(monitor_width/2)
-        self.y_value = int(self.settings['y']) if monitor_height>=120+int(self.settings['y']) else int(monitor_height/2)
+        self.x_value = int(self.settings['x']) if monitor_width >= 330 + int(self.settings['x']) else int(
+            monitor_width / 2)
+        self.y_value = int(self.settings['y']) if monitor_height >= 120 + int(self.settings['y']) else int(
+            monitor_height / 2)
         self.lock_window = self.settings['lock_window']
         self.background_transparency = self.settings['background_transparency']
         self.current_color_scheme = self.settings['current_color_scheme']
@@ -91,10 +103,9 @@ class ClockWindow(QMainWindow):
         self.current_version = self.settings["current_version"]
         self.need_to_send = self.settings["need_to_send"]
 
-
         self.color_schemes_list = {}
-        self.toucan_full = QPixmap(str(resource_path/"toucan/toucan_full.png"))
-        self.toucan_wrap = QPixmap(str(resource_path/"toucan/toucan_wrap.png"))
+        self.toucan_full = QPixmap(str(resource_path / "toucan/toucan_full.png"))
+        self.toucan_wrap = QPixmap(str(resource_path / "toucan/toucan_wrap.png"))
 
         self.drag_pos = None
         self.set_window_flags(self.lock_window)
@@ -118,7 +129,7 @@ class ClockWindow(QMainWindow):
         self.inner_total_x = 15
         self.inner_total_y = 15
         self.root_container.setGeometry(self.inner_total_x, self.inner_total_y, 300, 120)
-        if self.current_color_scheme==5:
+        if self.current_color_scheme == 5:
             self.root_container.setStyleSheet("""
                                    QWidget{
                                 background-color: transparent;
@@ -131,7 +142,6 @@ class ClockWindow(QMainWindow):
                        border-radius: 60px;
                        padding: 0px;
                        }}""")
-
 
         delete_label = QLabel(self.root_container)
         delete_label.setGeometry(15, 11, 250, 90)
@@ -183,7 +193,7 @@ class ClockWindow(QMainWindow):
         self.vbox.setContentsMargins(0, 0, 0, 0)
         self.vbox.setSpacing(0)
         self.timer_label = TimeLabel(self.time_font)
-        self.timer_label.set_background_transparency(0.7 if self.current_color_scheme==5 else 0.0)
+        self.timer_label.set_background_transparency(0.7 if self.current_color_scheme == 5 else 0.0)
         self.timer_label.fontChanged.connect(self.save_settings)
 
         # ПЛЕЕР МУЗЫКИ
@@ -203,7 +213,7 @@ class ClockWindow(QMainWindow):
         play_button_layout.setAlignment(Qt.AlignLeft)
 
         self.play_button = PlayButton(self.volume, self.time_widget, delete_label)
-        self.play_button.volume_change.connect(lambda value:{
+        self.play_button.volume_change.connect(lambda value: {
             self.save_settings(),
             self.audio_player.set_volume(value)
         })
@@ -249,14 +259,16 @@ class ClockWindow(QMainWindow):
         first_settings_hbox.setSpacing(10)
 
         # ВВОД РАБОЧЕГО ПЕРИОДА
-        self.work_interval_widget = IntervalInputWidget(self, self.work_interval, "Сколько работать", "icons/work_white.svg")
+        self.work_interval_widget = IntervalInputWidget(self, self.work_interval, "Сколько работать",
+                                                        "icons/work_white.svg")
         self.work_interval_widget.textChanged.connect(lambda text: {
             self.handle_work_text_input(text, self.work_interval_widget)
         })
         first_settings_hbox.addWidget(self.work_interval_widget)
 
         # ВВОД ПЕРИОДА ОТДЫХА
-        self.rest_interval_widget = IntervalInputWidget(self, self.rest_interval, "Сколько отдыхать", "icons/rest_white.svg")
+        self.rest_interval_widget = IntervalInputWidget(self, self.rest_interval, "Сколько отдыхать",
+                                                        "icons/rest_white.svg")
         self.rest_interval_widget.textChanged.connect(lambda text: {
             self.handle_rest_text_input(text, self.rest_interval_widget)
         })
@@ -277,13 +289,13 @@ class ClockWindow(QMainWindow):
         second_settings_hbox.setSpacing(10)
 
         # КНОПКА РАНДОМА
-        random_widget = CheckboxWidget(self, "Случайное воспроизведение", "icons/random_white.svg", self.settings['random'])
+        random_widget = CheckboxWidget(self, "Случайное воспроизведение", "icons/random_white.svg",
+                                       self.settings['random'])
         random_widget.stateChanged.connect(lambda state: {
             self.audio_player.switch_random(state),
             self.save_settings(),
         })
         second_settings_hbox.addWidget(random_widget)
-
 
         # КНОПКА БЛОКИРОВКИ ОКНА
         lock_window_widget = CheckboxWidget(self, "Поверх всех окон", "icons/lock_white.svg", self.lock_window)
@@ -294,7 +306,6 @@ class ClockWindow(QMainWindow):
         second_settings_hbox.addWidget(lock_window_widget)
         settings_vbox.addWidget(second_settings_widget, alignment=Qt.AlignCenter)
 
-
         # СЛАЙДЕР ПРОЗРАЧНОСТИ ФОНА
         self.background_transparent_slider = Slider(self, "Прозрачность фона", self.first_gradient_color)
         self.background_transparent_slider.setRange(1, 100)
@@ -303,7 +314,6 @@ class ClockWindow(QMainWindow):
         self.background_transparent_slider.valueChanged.connect(self.change_background_color)
 
         settings_vbox.addWidget(self.background_transparent_slider, alignment=Qt.AlignmentFlag.AlignCenter)
-
 
         # ЦВЕТОВЫЕ СХЕМЫ
         third_settings_widget = QWidget()
@@ -316,7 +326,7 @@ class ClockWindow(QMainWindow):
         third_settings_hbox = QHBoxLayout(third_settings_widget)
         third_settings_hbox.setSpacing(0)
 
-        self.toucan_button = ToucanButton(str(resource_path/"toucan/toucan_icon.png"))
+        self.toucan_button = ToucanButton(str(resource_path / "toucan/toucan_icon.png"))
         for i in range(1, 5):
             color_scheme = ColorSchemeSquare(self, i, self.settings[f'scheme_{i}_first_color'],
                                              self.settings[f'scheme_{i}_second_color'])
@@ -328,15 +338,13 @@ class ClockWindow(QMainWindow):
             self.color_schemes_list[i] = color_scheme
             third_settings_hbox.addWidget(color_scheme)
 
-
         if self.current_color_scheme == 5:
             self.toucan_button.set_is_current(True)
         self.toucan_button.clicked.connect(lambda: {
-                self.set_gradient_color(5, "", ""),
-            })
+            self.set_gradient_color(5, "", ""),
+        })
         third_settings_hbox.addWidget(self.toucan_button)
         settings_vbox.addWidget(third_settings_widget)
-
 
         # КНОПКА ВЫБОРА ПАПКИ С МУЗЫКОЙ
         self.music_widget = QWidget()
@@ -344,11 +352,14 @@ class ClockWindow(QMainWindow):
 
         self.music_hbox = QHBoxLayout(self.music_widget)
         self.music_hbox.setContentsMargins(0, 0, 0, 0)
-        self.select_folder_button = PickMusicFolderButton(self,getPathString(self.settings['music_path']) if self.settings['music_path'] != '' else 'Музыка')
+        self.select_folder_button = PickMusicFolderButton(self,
+                                                          getPathString(self.settings['music_path']) if self.settings[
+                                                                                                            'music_path'] != '' else 'Музыка')
         self.select_folder_button.clicked.connect(self.select_folder)
-        self.select_folder_button.delete_clicked.connect(lambda:{
+        self.select_folder_button.delete_clicked.connect(lambda: {
             self.audio_player.set_music_off(),
-            self.select_folder_button.setText("Музыка")
+            self.select_folder_button.setText("Музыка"),
+            self.key_listener.stop()
         })
         self.music_hbox.addWidget(self.select_folder_button)
 
@@ -356,7 +367,6 @@ class ClockWindow(QMainWindow):
         self.time_slider = Slider(self, "Перемотка времени", self.first_gradient_color)
         self.time_slider.valueChanged.connect(self.set_remain_time)
         settings_vbox.addWidget(self.time_slider, alignment=Qt.AlignmentFlag.AlignCenter)
-
 
         # АНИМАЦИЯ ОТКРЫТИЯ
         self.open_settings_animation = QPropertyAnimation(self.root_container, b"geometry")
@@ -380,7 +390,8 @@ class ClockWindow(QMainWindow):
 
         self.key_listener = GlobalKeyListener()
         self.key_listener.key_pressed.connect(self.on_key_pressed)
-        self.key_listener.start()
+        self.key_listener.service_combo.connect(self.on_service_pressed)
+        if self.audio_player.path_to_music: self.key_listener.start()
 
         self.init_timer()
         self.init_tray()
@@ -405,8 +416,11 @@ class ClockWindow(QMainWindow):
         elif key_name == 'page down':
             self.play_next_track()
 
+    def on_service_pressed(self, is_pressed):
+        self.service_combo = is_pressed
+
     def handle_work_text_input(self, text, field):
-        if text.isdigit() and 999 >=int(text)>0:
+        if text.isdigit() and 999 >= int(text) > 0:
             if len(text) == 3:
                 field.setStyle("""
                         QLineEdit{
@@ -434,7 +448,6 @@ class ClockWindow(QMainWindow):
         else:
             field.setText("30")
 
-
         new_work_interval = int(self.work_interval_widget.text()) * 60
         if self.work_interval != new_work_interval:
             self.work_interval = new_work_interval
@@ -443,10 +456,8 @@ class ClockWindow(QMainWindow):
             self.time_slider.setValue(0)
             self.set_remain_time(0)
 
-
-
     def handle_rest_text_input(self, text, field):
-        if text.isdigit() and 999 >=int(text)>0:
+        if text.isdigit() and 999 >= int(text) > 0:
             if len(text) == 3:
                 field.setStyle("""
                         QLineEdit{
@@ -474,7 +485,6 @@ class ClockWindow(QMainWindow):
         else:
             field.setText("5")
 
-
         new_rest_interval = int(self.rest_interval_widget.text()) * 60
         if self.rest_interval != new_rest_interval:
             self.rest_interval = new_rest_interval
@@ -482,7 +492,6 @@ class ClockWindow(QMainWindow):
             self.time_slider.setRange(0, self.rest_interval - 8)
             self.time_slider.setValue(0)
             self.set_remain_time(0)
-
 
     def set_window_flags(self, state):
         self.lock_window = state
@@ -525,10 +534,10 @@ class ClockWindow(QMainWindow):
                 schema.set_is_current(True)
                 setattr(self, f'scheme_{key}_first_color', first_color)
                 setattr(self, f'scheme_{key}_second_color', second_color)
-        if index ==5:
+        if index == 5:
             self.current_color_scheme = 5
-            first_color="#ffd700"
-            second_color="#cd8501"
+            first_color = "#ffd700"
+            second_color = "#cd8501"
             self.flip_card.set_font_color(first_color)
             self.background_transparent_slider.set_color(first_color)
             self.time_slider.set_color(first_color)
@@ -569,21 +578,37 @@ class ClockWindow(QMainWindow):
             "PTMono.ttf",
             "HYWenHei.ttf",
             "Stengazeta.ttf",
-            "Ringus-Regular.otf",
             "NeeNoo.ttf",
             "Kvadrat.otf",
+            "Belarus.ttf",
             "Strogo.ttf",
-            "Belarus.ttf"
+            "Quantor.otf",
+            "Educational Gothic.otf",
+            "Genzsch.ttf",
+            "Manasco (sherbackoffalex).otf",
+            "OpenLukyanov.otf",
+            "Goudy Old Style Bold.ttf",
+            "Screpka.ttf",
+            "Tilda Grande.otf",
+            "SK Nigar RUS.otf",
+            "BUSE letters 16x8.otf",
+            "Divagon.otf",
+            "Leporid.otf",
+            "Audex.ttf",
+            "Type Light Sans.otf",
+            "Hexcore.ttf",
+            "MMHBounce.ttf",
+            "MonteSummaC.otf"
         ]
         for font_file in fonts:
-            font_path = get_resource_path("fonts/"+font_file)
-            font_db.addApplicationFont(str(font_path))
+            font_path = get_resource_path(os.path.join("resources/fonts", font_file))
+            font_db.addApplicationFont(font_path)
 
     def init_tray(self):
         # Создаем иконку в системном трее
         self.tray_icon = QSystemTrayIcon(self)
         self.tray_icon.setIcon(QIcon(get_resource_path("resources/icon.ico")))
-        self.tray_icon.setToolTip(f"Focus Timer v{self.version} - Нажмите дважды, чтобы скрыть")
+        self.tray_icon.setToolTip(f"Focus v{self.version} - Нажмите дважды, чтобы скрыть")
         # Создаем контекстное меню для трея
         tray_menu = QMenu()
         tray_menu.setStyleSheet("""
@@ -654,8 +679,6 @@ class ClockWindow(QMainWindow):
         self.tray_icon.activated.connect(self.tray_icon_activated)
         self.tray_icon.show()
 
-
-
     def tray_stop_pause(self):
         self.play_pause(self.play_button.is_playing)
         self.play_button.is_playing = not self.play_button.is_playing
@@ -669,6 +692,7 @@ class ClockWindow(QMainWindow):
 
     def quit_app(self):
         self.tray_icon.hide()
+        self.key_listener.stop()
         QApplication.quit()
 
     # СОХРАНЯЕТ НАСТРОЙКИ
@@ -686,7 +710,7 @@ class ClockWindow(QMainWindow):
             "lock_window": self.lock_window,
             "background_transparency": self.background_transparency,
             "current_color_scheme": self.current_color_scheme,
-            "volume":self.play_button.getVolume(),
+            "volume": self.play_button.getVolume(),
             "scheme_1_first_color": self.scheme_1_first_color,
             "scheme_1_second_color": self.scheme_1_second_color,
             "scheme_2_first_color": self.scheme_2_first_color,
@@ -700,7 +724,7 @@ class ClockWindow(QMainWindow):
             "need_to_send": self.need_to_send,
         }
         appdata = os.getenv('APPDATA')
-        app_dir = Path(appdata) / "FocusTimer" / 'settings.json'
+        app_dir = Path(appdata) / "Focus" / 'settings.json'
 
         with open(str(app_dir), "w", encoding='utf-8') as f:
             json.dump(settings, f, indent=4, ensure_ascii=False)
@@ -714,6 +738,7 @@ class ClockWindow(QMainWindow):
                 self.select_folder_button.setText(getPathString(folder_path))
                 self.audio_player.set_music_folder(folder_path)
                 self.save_settings()
+                self.key_listener.start()
 
     def set_remain_time(self, value):
         if self.is_rest_period:
@@ -744,7 +769,6 @@ class ClockWindow(QMainWindow):
             self.is_running = False
             self.tick_timer.stop()
 
-
     def update_timer(self):
         """Обновление таймера каждую секунду"""
         self.remaining_time -= 1
@@ -768,7 +792,6 @@ class ClockWindow(QMainWindow):
             if self.is_rest_period:
                 self.audio_player.play_music()
             self.switch_period()
-
 
     def update_progress_indicator(self):
         """Обновление индикатора прогресса (обводки)"""
@@ -827,10 +850,20 @@ class ClockWindow(QMainWindow):
     def open_settings(self):
         """Открывает настройки - показываем нижнюю часть и увеличиваем контейнер"""
         if self.settings_closed:
-            self.settings_closed = False
-            self.flip_card.show()
-            self.open_button.hide()
-            self.open_settings_animation.start()
+            if self.service_combo:
+                appdata = os.getenv('APPDATA')
+                app_dir = Path(appdata) / "Focus" / 'settings.json'
+                try:
+                    if app_dir.exists():
+                        app_dir.unlink()  # Удаляем файл
+                        self.quit_app()
+                except Exception as error:
+                    print(f"Ошибка при удалении файла настроек: {error}")
+            else:
+                self.settings_closed = False
+                self.flip_card.show()
+                self.open_button.hide()
+                self.open_settings_animation.start()
 
     def close_settings(self):
         """Закрывает настройки - скрываем нижнюю часть и уменьшаем контейнер"""
@@ -864,9 +897,10 @@ class ClockWindow(QMainWindow):
 
         pen = QPen(QBrush(gradient), 10)
         painter.setPen(pen)
-        painter.drawRoundedRect(self.inner_total_x - 10, self.inner_total_y - 10, self.root_container.width() + 20,self.root_container.height() + 20, 69, 69)
+        painter.drawRoundedRect(self.inner_total_x - 10, self.inner_total_y - 10, self.root_container.width() + 20,
+                                self.root_container.height() + 20, 69, 69)
 
-        if self.current_color_scheme ==5:
+        if self.current_color_scheme == 5:
             painter.setBrush(QColor("#1B2228"))
             painter.setPen(Qt.NoPen)
             painter.drawRoundedRect(self.inner_total_x, self.inner_total_y, self.root_container.width(),
@@ -877,7 +911,7 @@ class ClockWindow(QMainWindow):
                 if self.toucan_full:
                     # Масштабируем под размер виджета
                     scaled_pixmap = self.toucan_full.scaled(
-                        300,300,
+                        300, 300,
                         Qt.IgnoreAspectRatio,
                         Qt.SmoothTransformation
                     )
@@ -960,7 +994,7 @@ class ClockWindow(QMainWindow):
 
 
 if __name__ == "__main__":
-    version = "2.1.0"
+    version = "2.1.1"
 
     try:
         app = QApplication(sys.argv)
@@ -974,4 +1008,3 @@ if __name__ == "__main__":
     except Exception as e:
         log_error(error=str(e), method_prefix="ОШИБКА в основном методе")
         print("ОШИБКА в основном методе: ", e)
-
